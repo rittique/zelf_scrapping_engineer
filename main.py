@@ -114,7 +114,7 @@ def get_posts():
                 'author_username': item.find("p", class_='css-2zn17v-PUniqueId etrd4pu6').get_text(),
             }
             posts.append(post)
-            #print(post)
+            print(post)
     except Exception as e:
         pass
 
@@ -277,6 +277,8 @@ if __name__=="__main__":
             for keyword in keywords:
                 time.sleep(random.randint(5, 10))
                 session_posts_keyword = get_posts_by_keywords(keyword)
+                df = pd.DataFrame(session_posts_keyword)
+                df.to_csv("posts.csv", mode="a", header=False)
                 for post in session_posts_keyword:
                     all_posts_by_keywords.append(post)
             print("Posts through Keywords: ", len(all_posts_by_keywords))
@@ -288,6 +290,8 @@ if __name__=="__main__":
             for hastag in hashtags:
                 time.sleep(random.randint(5, 10))
                 session_posts_hashtags = get_posts_by_keywords(hashtag)
+                df = pd.DataFrame(session_posts_keyword)
+                df.to_csv("posts.csv", mode="a", header=False)
                 for post in session_posts_hashtags:
                     all_posts_by_keywords.append(post)
             print("Posts through Hastags", len(all_posts_by_hashtags))
@@ -303,8 +307,6 @@ if __name__=="__main__":
         # Retrieving all posts to verify insertion
         all_posts = get_all_posts(conn)
         print("Posts:", len(all_posts))
-        dummy_url = "https://www.tiktok.com/@tring_biring_ghost/video/7272750125674482945"
-        insert_user(conn, get_user(dummy_url).values()[0], get_user(dummy_url).values()[1], get_user(dummy_url).values()[2])
 
         conn.close()
 
