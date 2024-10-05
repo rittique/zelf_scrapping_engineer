@@ -1,4 +1,6 @@
 import os
+import csv
+import json
 import zipfile
 import random
 from selenium import webdriver
@@ -13,8 +15,31 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 import lxml.html
-from db import connect_to_db, insert_multiple_posts, get_all_posts, insert_user, get_all_urls
+from db import connect_to_db, insert_multiple_posts, get_all_posts, insert_user, get_all_urls, insert_post
 import pandas as pd
+import re
+
+def remove_emojis_and_hashtags(text):
+    # Remove emojis using regex pattern for Unicode emoji range
+    emoji_pattern = re.compile("["
+                           u"\U0001F600-\U0001F64F"  # Emoticons
+                           u"\U0001F300-\U0001F5FF"  # Symbols & Pictographs
+                           u"\U0001F680-\U0001F6FF"  # Transport & Map Symbols
+                           u"\U0001F700-\U0001F77F"  # Alchemical Symbols
+                           u"\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
+                           u"\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
+                           u"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+                           u"\U0001FA00-\U0001FA6F"  # Chess Symbols
+                           u"\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+                           "]+", flags=re.UNICODE)
+    
+    # Remove emojis from the text
+    text = emoji_pattern.sub(r'', text)
+
+    # Remove hashtags using regex
+    text = re.sub(r'#\w+', '', text)
+    
+    return text
 
 
 # List of proxies in the format: IP:PORT:USERNAME:PASSWORD
@@ -110,7 +135,7 @@ def get_posts():
         for item in posts:
             post = {
                 'video_url': item.div.div.div.a.get('href'),
-                'video_caption': item.find("h1", class_='css-6opxuj-H1Container ejg0rhn1').get_text(),
+                'video_caption': remove_emojis_and_hashtags(item.find("h1", class_='css-6opxuj-H1Container ejg0rhn1').get_text()),
                 'author_username': item.find("p", class_='css-2zn17v-PUniqueId etrd4pu6').get_text(),
             }
             posts.append(post)
@@ -168,7 +193,14 @@ def get_posts_by_keywords(keyword):
         print("Element is not clickable at the moment.")
 
     scroll_down()
-    return get_posts()
+    # Call get_posts() to retrieve the list of posts
+    posts = get_posts()
+
+    # Add the 'keyword' field to each post
+    for post in posts:
+        post['keyword'] = keyword
+
+    return posts
     
 
 
@@ -249,72 +281,67 @@ def get_driver(proxy_auth_plugin_path):
     # Launch the WebDriver with the proxy settings
     return webdriver.Chrome(options=chrome_options)
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
-    # Create the proxy authentication extension
-    keywords = ["beautiful destinations",
-                "places to visit",
-                "places to travel",
-                "places that don't feel real",
-                "travel hacks"]
+    keywords = ["beautiful destinations", "places to visit", "places to travel", 
+                "places that don't feel real", "travel hacks"]
 
     hashtags = ["traveltok", "wanderlust", "backpackingadventures", 
                 "luxurytravel", "hiddengems", "solotravel", "roadtripvibes", 
                 "travelhacks", "foodietravel", "sustainabletravel"]
-    
+
     all_posts_by_keywords = []
     all_posts_by_hashtags = []
-    driver = uc.Chrome()
 
     conn = connect_to_db()
 
-    nb_retries = 10
-
-    # Visit a website
     try:
+        # Scraping posts by keywords
         try:
-            driver = uc.Chrome()
+            driver = webdriver.Chrome()
             for keyword in keywords:
                 time.sleep(random.randint(5, 10))
-                session_posts_keyword = get_posts_by_keywords(keyword)
-                df = pd.DataFrame(session_posts_keyword)
-                df.to_csv("posts.csv", mode="a", header=False)
-                for post in session_posts_keyword:
+                session_posts_keywords = get_posts_by_hastag(keyword)
+                for post in session_posts_keywords:
                     all_posts_by_keywords.append(post)
-            print("Posts through Keywords: ", len(all_posts_by_keywords))
-        except:
-            pass
+            print("Posts through Keywords:", len(all_posts_by_keywords))
+        except Exception as e:
+            print(f"Error scraping by keywords: {e}")
 
+        # Scraping posts by hashtags
         try:
-            driver = uc.Chrome()
-            for hastag in hashtags:
+            driver = webdriver.Chrome()
+            for hashtag in hashtags:
                 time.sleep(random.randint(5, 10))
-                session_posts_hashtags = get_posts_by_keywords(hashtag)
-                df = pd.DataFrame(session_posts_keyword)
-                df.to_csv("posts.csv", mode="a", header=False)
+                session_posts_hashtags = get_posts_by_hastag(hashtag)
                 for post in session_posts_hashtags:
-                    all_posts_by_keywords.append(post)
-            print("Posts through Hastags", len(all_posts_by_hashtags))
-        except:
-            pass
+                    all_posts_by_hashtags.append(post)
+            print("Posts through Hashtags:", len(all_posts_by_hashtags))
+        except Exception as e:
+            print(f"Error scraping by hashtags: {e}")
 
     except Exception as e:
-        print(f"Scrapping ended for: \n {e}")
+        print(f"Scraping ended for: {e}")
+
+    # Inserting the scraped data into the database
+    try:
+        # Assuming each post has 'video_url', 'video_caption', and 'author_username' fields
+        for post in all_posts_by_keywords:
+            video_url = post.get('video_url')  # Extract video URL from the post
+            video_caption = post.get('video_caption')  # Extract caption from the post
+            author_username = post.get('author_username')  # Extract author username
+            if video_url and video_caption and author_username:
+                insert_post(conn, video_url, video_caption, author_username)
+
+        for post in all_posts_by_hashtags:
+            video_url = post.get('video_url')  # Extract video URL from the post
+            video_caption = post.get('video_caption')  # Extract caption from the post
+            author_username = post.get('author_username')  # Extract author username
+            if video_url and video_caption and author_username:
+                insert_post(conn, video_url, video_caption, author_username)
+
+        print("Data successfully inserted into the database.")
+    except Exception as e:
+        print(f"Error inserting data: {e}")
     
-    finally:
-        insert_multiple_posts(conn, all_posts_by_keywords)
-        insert_multiple_posts(conn, all_posts_by_hashtags)
-        # Retrieving all posts to verify insertion
-        all_posts = get_all_posts(conn)
-        print("Posts:", len(all_posts))
-
-        conn.close()
-
-    
-
-
-
-
-
-
-
+    conn.close()

@@ -122,31 +122,6 @@ def insert_multiple_posts(conn, posts_list):
     
     conn.commit()
 
-# Example of how to use the functions
-if __name__ == "__main__":
-    conn = connect_to_db()
-    create_tables(conn)
-    conn.close()
-
-    """
-    
-    
-    # Example insertions
-    insert_user(conn, 1000, 500, 20000)  # Inserting a user
-    insert_post(conn, 'http://video.com/123', 'Check out this cool video', 'user1')  # Inserting a post
-
-    # Retrieving data
-    users = get_all_users(conn)
-    print("Users:", users)
-
-    posts = get_all_posts(conn)
-    print("Posts:", posts)
-
-    # Closing the connection
-    conn.close()
-
-    """
-
 # Function to check if a video_url already exists in the posts table
 def video_url_exists(conn, video_url):
     cursor = conn.cursor()
@@ -181,13 +156,9 @@ def get_all_urls(conn):
     return [url[0] for url in urls]
 
 
-# Example usage:
+# Example of how to use the functions
 if __name__ == "__main__":
     conn = connect_to_db()
-    create_tables(conn)
-
-    # Retrieving all posts to verify insertion
-    all_posts = get_all_posts(conn)
-    print("Posts:", all_posts)
-
+    all_data = get_all_posts(conn)
+    print(len(all_data))
     conn.close()
